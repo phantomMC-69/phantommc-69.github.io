@@ -1,0 +1,102 @@
+<script type="text/javascript">
+      function changecolor(el) {
+        document.body.style.backgroundColor = el.value;
+      }
+	
+      const CHANGE_ASPECT_RATIO = true;
+      var bodyElement = document.getElementsByTagName("body")[0];
+      var statusElement = document.getElementById("status");
+      var progressElement = document.getElementById("progress");
+      var spinnerElement = document.getElementById("spinner");
+      var canvasElement = document.getElementById("canvas");
+      var outputElement = document.getElementById("output");
+      var outputContainerElement = document.getElementById("output-container");
+      var pauseMenu = document.getElementById("pauseMenuContainer");
+      var resumeButton = document.getElementById("resumeButton");
+      var quitButton = document.getElementById("quitButton");
+
+      const messageContainerElement = document.getElementById("message-container");
+      const messagesElement = document.getElementById("messages");
+      let rollbackMessages = [];
+	  
+      const CONSOLE_layer_set_visible = "layer_set_visible() - could not find specified layer in current room";
+      const CONSOLE_layer_tilemap_get_id = "layer_tilemap_get_id() - specified tilemap not found";
+      const CONSOLE_layer_depth = "layer_depth() - can't find specified layer";
+      const CONSOLE_draw_tilemap = "draw_tilemap() - couldn't find specified tilemap";
+      const CONSOLE_layer_get_all_elements = "layer_get_all_elements() - can't find specified layer";
+      
+      console.log("*************************");
+      console.log("BetterRunner v1.2");
+      console.log("_____by burnedpopcorn180");
+      console.log("*************************");
+
+      var loadprogress = 0;
+      var startingHeight, startingWidth;
+      var startingAspect;
+
+      let mergedGameUnxData = null;
+
+      var Module = {
+        preRun: [function() {
+          if (mergedGameUnxData) {
+            Module.setStatus("Mounting game data...");
+            if (typeof FS !== "undefined" && FS.createDataFile) {
+              FS.createDataFile("/", "game.unx", mergedGameUnxData, true, true, true);
+            } else if (typeof Module.FS_createDataFile !== "undefined") {
+              Module.FS_createDataFile("/", "game.unx", mergedGameUnxData, true, true, true);
+            } else {
+              console.error("Emscripten FS interface not available.");
+            }
+          }
+        }],
+        postRun: [],
+        print: (function () {
+          var element = document.getElementById("output");
+          if (element) element.value = "";
+          return function (text) {
+            if (text === "Starting WAD") {
+              loadprogress += 1;
+            }
+            if (loadprogress === 1) {
+              Module.setStatus(text);
+            } else if (loadprogress >= 2) {
+              Module.setStatus("");
+            }
+            if (arguments.length > 1)
+              text = Array.prototype.slice.call(arguments).join(" ");
+            if (text != CONSOLE_layer_set_visible && text != CONSOLE_layer_tilemap_get_id && text != CONSOLE_layer_depth && text != CONSOLE_draw_tilemap && text != CONSOLE_layer_get_all_elements) {
+              console.log(text);
+            }
+            if (text === "Entering main loop.") {
+              ensureAspectRatio();
+              loadprogress += 1;
+            }
+            if (element) {
+              if (text != CONSOLE_layer_set_visible && text != CONSOLE_layer_tilemap_get_id && text != CONSOLE_layer_depth && text != CONSOLE_draw_tilemap && text != CONSOLE_layer_get_all_elements) {
+                element.value += text + "\n";
+              }
+              element.scrollTop = element.scrollHeight;
+            }
+          };
+        })(),
+        printErr: function (text) {
+          if (arguments.length > 1)
+            text = Array.prototype.slice.call(arguments).join(" ");
+          console.error(text);
+        },
+        canvas: (function () {
+          return document.getElementById("canvas");
+        })(),
+        setStatus: function (text) {
+          if (!Module.setStatus.last)
+            Module.setStatus.last = { time: Date.now(), text: "" };
+          if (text === Module.setStatus.last.text) return;
+          var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+          var now = Date.now();
+          if (m && now - Module.setStatus.last.time < 30) return;
+          Module.setStatus.last.time = now;
+          Module.setStatus.last.text = text;
+          if (m) {
+            text = m[1];
+            progressElement.value = parseInt(m[2]) * 100;
+            progressElement.max = parseInt(m[4]) * 10
